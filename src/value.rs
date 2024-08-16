@@ -15,6 +15,13 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn get_string<'a>(&self, buf: &'a [u8]) -> &'a str {
+        let Value::String { start, end } = self else {
+            unreachable!()
+        };
+        unsafe { std::str::from_utf8_unchecked(&buf[*start..*end]) }
+    }
+
     fn datatype(&self) -> &str {
         match self {
             Value::Int(_) => "int",
@@ -77,12 +84,12 @@ impl Value {
         self.gt(other) || self.eq(other, buf)
     }
 
-    pub fn lt(&self, other: &Self) -> bool {
-        !self.gt(other)
+    pub fn lt(&self, other: &Self, buf: &[u8]) -> bool {
+        !self.gte(other, buf)
     }
 
     pub fn lte(&self, other: &Self, buf: &[u8]) -> bool {
-        self.lt(other) || self.eq(other, buf)
+        self.lt(other, buf) || self.eq(other, buf)
     }
 }
 

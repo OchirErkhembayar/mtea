@@ -1,7 +1,10 @@
 use crate::{
     parse::{Ast, Expr},
     value::Value,
-    vm::{OP_CONST, OP_FALSE, OP_JUMP, OP_JUMP_IF_FALSE, OP_NIL, OP_POP, OP_RET, OP_TRUE},
+    vm::{
+        OP_CONST, OP_DEFINE_GLOBAL, OP_FALSE, OP_GET_GLOBAL, OP_JUMP, OP_JUMP_IF_FALSE, OP_NIL,
+        OP_POP, OP_RET, OP_TRUE,
+    },
 };
 
 #[derive(Debug)]
@@ -39,7 +42,9 @@ impl Default for Program {
 pub fn compile(ast: Ast) -> Program {
     let mut program = Program::default();
     match ast {
-        Ast::Expr(expr) => compile_expr(expr, &mut program),
+        Ast::Exprs(exprs) => exprs
+            .into_iter()
+            .for_each(|expr| compile_expr(expr, &mut program)),
     };
     program.add_instr(OP_RET);
     program
@@ -95,6 +100,14 @@ fn compile_expr(expr: Expr, program: &mut Program) {
             patch_jump(else_jump, program);
         }
         Expr::Nil => program.add_instr(OP_NIL),
-        Expr::Var { start: _, end: _ } => todo!(),
+        Expr::Assign { start, end, value } => {
+            program.add_const(Value::String { start, end });
+            compile_expr(*value, program);
+            program.add_instr(OP_DEFINE_GLOBAL);
+        }
+        Expr::Var { start, end } => {
+            program.add_const(Value::String { start, end });
+            program.add_instr(OP_GET_GLOBAL);
+        }
     };
 }

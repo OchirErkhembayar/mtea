@@ -34,7 +34,9 @@ pub fn run_buf(buf: &[u8]) {
             return;
         }
     };
+    println!("Ast: {:?}", ast);
     let program = compile(ast);
+    println!("Program: {:?}", program);
     let mut vm = Vm::new(program, buf);
     let _ = vm.run();
 }

@@ -12,7 +12,7 @@ type ParseRes<T> = Result<T, ParseErr>;
 
 #[derive(Debug)]
 pub enum Ast {
-    Expr(Expr),
+    Exprs(Vec<Expr>),
 }
 
 #[derive(Debug)]
@@ -42,6 +42,11 @@ pub enum Expr {
     Var {
         start: usize,
         end: usize,
+    },
+    Assign {
+        start: usize,
+        end: usize,
+        value: Box<Expr>,
     },
 }
 
@@ -160,13 +165,35 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_at_end(&self) -> bool {
+        self.peek().token_type == TokenType::Eof
+    }
+
     pub fn parse(&mut self) -> ParseRes<Ast> {
-        let expr = self.expression()?;
-        Ok(Ast::Expr(expr))
+        let mut exprs = vec![];
+        while !self.is_at_end() {
+            exprs.push(self.expression()?);
+        }
+        Ok(Ast::Exprs(exprs))
     }
 
     fn expression(&mut self) -> ParseRes<Expr> {
-        self.if_expr()
+        match self.peek().token_type {
+            TokenType::Ident => self.var_dec(),
+            _ => self.if_expr(),
+        }
+    }
+
+    fn var_dec(&mut self) -> ParseRes<Expr> {
+        let name = self.consume(TokenType::Ident)?;
+        self.consume(TokenType::Eq)?;
+        let value = self.if_expr()?;
+        let expr = Expr::Assign {
+            start: name.start,
+            end: name.end,
+            value: Box::new(value),
+        };
+        Ok(expr)
     }
 
     fn if_expr(&mut self) -> ParseRes<Expr> {
