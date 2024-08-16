@@ -68,7 +68,6 @@ impl<'a> Vm<'a> {
         let fst = self.read_byte() as u16;
         let snd = self.read_byte() as u16;
         fst << 8 | snd
-        // doing this
     }
 
     fn push(&mut self, value: Value) {
@@ -85,6 +84,16 @@ impl<'a> Vm<'a> {
         self.stack[self.sp - 1 - arg]
     }
 
+    fn binary<F>(&mut self, operation: F) -> Result<(), RuntimeErr>
+    where
+        F: Fn(Value, Value) -> Result<Value, RuntimeErr>,
+    {
+        let right = self.pop();
+        let left = self.pop();
+        self.push(operation(left, right)?);
+        Ok(())
+    }
+
     pub fn run(&mut self) -> Result<(), RuntimeErr> {
         loop {
             let instr = self.read_byte();
@@ -95,84 +104,19 @@ impl<'a> Vm<'a> {
                     let value = self.consts[idx];
                     self.push(value);
                 }
-                OP_ADD => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = (left + right)?;
-                    self.push(result)
-                }
-                OP_SUB => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = (left - right)?;
-                    self.push(result)
-                }
-                OP_MUL => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = (left * right)?;
-                    self.push(result)
-                }
-                OP_DIV => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = (left / right)?;
-                    self.push(result)
-                }
-                OP_MOD => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = (left % right)?;
-                    self.push(result)
-                }
-                OP_EQ => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.eq(&right, self.buf));
-                    self.push(result)
-                }
-                OP_NOT_EQ => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(!left.eq(&right, self.buf));
-                    self.push(result)
-                }
-                OP_GT => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.gt(&right));
-                    self.push(result)
-                }
-                OP_GTE => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.gte(&right, self.buf));
-                    self.push(result)
-                }
-                OP_LT => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.lt(&right, self.buf));
-                    self.push(result)
-                }
-                OP_LTE => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.lte(&right, self.buf));
-                    self.push(result)
-                }
-                OP_AND => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.bool() && right.bool());
-                    self.push(result)
-                }
-                OP_OR => {
-                    let right = self.pop();
-                    let left = self.pop();
-                    let result = Value::Bool(left.bool() || right.bool());
-                    self.push(result)
-                }
+                OP_ADD => self.binary(|a, b| (a + b))?,
+                OP_SUB => self.binary(|a, b| a - b)?,
+                OP_MUL => self.binary(|a, b| a * b)?,
+                OP_DIV => self.binary(|a, b| a / b)?,
+                OP_MOD => self.binary(|a, b| a % b)?,
+                OP_EQ => self.binary(|a, b| Ok(Value::Bool(a.eq(&b, self.buf))))?,
+                OP_NOT_EQ => self.binary(|a, b| Ok(Value::Bool(!a.eq(&b, self.buf))))?,
+                OP_GT => self.binary(|a, b| Ok(Value::Bool(a.gt(&b))))?,
+                OP_GTE => self.binary(|a, b| Ok(Value::Bool(a.gte(&b, self.buf))))?,
+                OP_LT => self.binary(|a, b| Ok(Value::Bool(a.lt(&b, self.buf))))?,
+                OP_LTE => self.binary(|a, b| Ok(Value::Bool(a.lte(&b, self.buf))))?,
+                OP_AND => self.binary(|a, b| Ok(Value::Bool(a.bool() && b.bool())))?,
+                OP_OR => self.binary(|a, b| Ok(Value::Bool(a.bool() || b.bool())))?,
                 OP_NEG => {
                     let arg = self.pop();
                     let result = (-arg)?;
