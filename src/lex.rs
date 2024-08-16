@@ -27,6 +27,7 @@ impl Token {
 pub enum TokenType {
     I32(i32),
     F32(f32),
+    Arrow,
     Bang,
     Plus,
     Minus,
@@ -48,8 +49,10 @@ pub enum TokenType {
     False,
     Ident,
     String,
+    Case,
     If,
     Do,
+    End,
     Else,
     Nil,
     Eof,
@@ -134,8 +137,13 @@ impl<'a> Lexer<'a> {
             b'o' => self.keyword("or", TokenType::Or),
             b'i' => self.keyword("if", TokenType::If),
             b'd' => self.keyword("do", TokenType::Do),
-            b'e' => self.keyword("else", TokenType::Else),
+            b'e' => match self.buf[self.start + 1] {
+                b'l' => self.keyword("else", TokenType::Else),
+                b'n' => self.keyword("end", TokenType::End),
+                _ => TokenType::Ident,
+            },
             b'n' => self.keyword("nil", TokenType::Nil),
+            b'c' => self.keyword("case", TokenType::Case),
             _ => TokenType::Ident,
         }
     }
@@ -191,7 +199,14 @@ impl<'a> Lexer<'a> {
                 return self.whitespace();
             }
             b'0'..=b'9' => self.number(next)?,
-            b'-' => TokenType::Minus,
+            b'-' => {
+                if self.peek(0) == b'>' {
+                    self.advance();
+                    TokenType::Arrow
+                } else {
+                    TokenType::Minus
+                }
+            }
             b'+' => TokenType::Plus,
             b'*' => TokenType::Mul,
             b'/' => TokenType::Div,
@@ -274,6 +289,7 @@ impl Display for TokenType {
         match self {
             TokenType::I32(int) => inner_write(int, f),
             TokenType::F32(float) => inner_write(float, f),
+            TokenType::Arrow => inner_write("->", f),
             TokenType::Plus => inner_write("+", f),
             TokenType::Minus => inner_write("-", f),
             TokenType::Mul => inner_write("*", f),
@@ -299,6 +315,8 @@ impl Display for TokenType {
             TokenType::Else => inner_write("else", f),
             TokenType::Nil => inner_write("nil", f),
             TokenType::Bang => inner_write("!", f),
+            TokenType::Case => inner_write("case", f),
+            TokenType::End => inner_write("end", f),
             TokenType::Eof => inner_write("EOF", f),
         }
     }

@@ -15,7 +15,19 @@ pub enum Ast {
     Exprs(Vec<Expr>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub case: Expr,
+    pub expr: Expr,
+}
+
+impl MatchArm {
+    fn new(case: Expr, expr: Expr) -> Self {
+        Self { case, expr }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     I32(i32),
     F32(f32),
@@ -38,6 +50,10 @@ pub enum Expr {
         then_expr: Box<Expr>,
         else_expr: Box<Expr>,
     },
+    Match {
+        target: Box<Expr>,
+        arms: Vec<MatchArm>,
+    },
     Nil,
     Var {
         start: usize,
@@ -50,7 +66,7 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinOp {
     Add,
     Minus,
@@ -108,7 +124,7 @@ impl From<TokenType> for BinOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum UnaryOp {
     Neg,
     Bang,
@@ -180,20 +196,43 @@ impl<'a> Parser<'a> {
     fn expression(&mut self) -> ParseRes<Expr> {
         match self.peek().token_type {
             TokenType::Ident => self.var_dec(),
-            _ => self.if_expr(),
+            _ => self.match_expr(),
         }
     }
 
     fn var_dec(&mut self) -> ParseRes<Expr> {
         let name = self.consume(TokenType::Ident)?;
         self.consume(TokenType::Eq)?;
-        let value = self.if_expr()?;
+        let value = self.match_expr()?;
         let expr = Expr::Assign {
             start: name.start,
             end: name.end,
             value: Box::new(value),
         };
         Ok(expr)
+    }
+
+    fn match_expr(&mut self) -> ParseRes<Expr> {
+        if self.peek().token_type == TokenType::Case {
+            self.next_token()?;
+            let target = self.match_expr()?;
+            self.consume(TokenType::Do)?;
+            let mut arms = vec![];
+            while self.peek().token_type != TokenType::End && !self.is_at_end() {
+                let case = self.match_expr()?;
+                self.consume(TokenType::Arrow)?;
+                let expr = self.match_expr()?;
+                let arm = MatchArm::new(case, expr);
+                arms.push(arm);
+            }
+            self.consume(TokenType::End)?;
+            Ok(Expr::Match {
+                target: Box::new(target),
+                arms,
+            })
+        } else {
+            self.if_expr()
+        }
     }
 
     fn if_expr(&mut self) -> ParseRes<Expr> {

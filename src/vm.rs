@@ -28,34 +28,47 @@ pub const OP_POP: u8 = 20;
 pub const OP_NOT: u8 = 21;
 pub const OP_DEFINE_GLOBAL: u8 = 22;
 pub const OP_GET_GLOBAL: u8 = 23;
-pub const OP_NIL: u8 = 24;
+pub const OP_COPY: u8 = 24;
+pub const OP_END_CASE: u8 = 25;
+pub const OP_ERROR: u8 = 26;
+pub const OP_NIL: u8 = 27;
 
 #[derive(Debug)]
-pub struct Vm<'a> {
+pub struct Vm {
     instrs: Vec<u8>,
     consts: Vec<Value>,
-    buf: &'a [u8],
     ip: usize,
     sp: usize,
     stack: [Value; STACK_SIZE],
-    globals: HashMap<&'a str, Value>,
+    globals: HashMap<String, Value>,
 }
 
 pub enum InterpRes {
     Ok,
 }
 
-impl<'a> Vm<'a> {
-    pub fn new(program: Program, buf: &'a [u8]) -> Self {
+impl Default for Vm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Vm {
+    pub fn new() -> Self {
         Self {
-            instrs: program.instrs,
-            consts: program.consts,
+            instrs: vec![],
+            consts: vec![],
             globals: HashMap::new(),
-            buf,
             ip: 0,
             sp: 0,
             stack: [Value::Nil; STACK_SIZE],
         }
+    }
+
+    pub fn update_program(&mut self, program: Program) {
+        self.instrs = program.instrs;
+        self.consts = program.consts;
+        self.ip = 0;
     }
 
     fn read_byte(&mut self) -> u8 {
@@ -94,10 +107,10 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    pub fn run(&mut self) -> Result<(), RuntimeErr> {
+    pub fn run(&mut self, buf: &[u8]) -> Result<(), RuntimeErr> {
         loop {
             let instr = self.read_byte();
-            self.debug_instr(instr);
+            self.debug_instr(instr, buf);
             match instr {
                 OP_CONST => {
                     let idx = self.read_byte() as usize;
@@ -109,12 +122,12 @@ impl<'a> Vm<'a> {
                 OP_MUL => self.binary(|a, b| a * b)?,
                 OP_DIV => self.binary(|a, b| a / b)?,
                 OP_MOD => self.binary(|a, b| a % b)?,
-                OP_EQ => self.binary(|a, b| Ok(Value::Bool(a.eq(&b, self.buf))))?,
-                OP_NOT_EQ => self.binary(|a, b| Ok(Value::Bool(!a.eq(&b, self.buf))))?,
+                OP_EQ => self.binary(|a, b| Ok(Value::Bool(a.eq(&b, buf))))?,
+                OP_NOT_EQ => self.binary(|a, b| Ok(Value::Bool(!a.eq(&b, buf))))?,
                 OP_GT => self.binary(|a, b| Ok(Value::Bool(a.gt(&b))))?,
-                OP_GTE => self.binary(|a, b| Ok(Value::Bool(a.gte(&b, self.buf))))?,
-                OP_LT => self.binary(|a, b| Ok(Value::Bool(a.lt(&b, self.buf))))?,
-                OP_LTE => self.binary(|a, b| Ok(Value::Bool(a.lte(&b, self.buf))))?,
+                OP_GTE => self.binary(|a, b| Ok(Value::Bool(a.gte(&b, buf))))?,
+                OP_LT => self.binary(|a, b| Ok(Value::Bool(a.lt(&b, buf))))?,
+                OP_LTE => self.binary(|a, b| Ok(Value::Bool(a.lte(&b, buf))))?,
                 OP_AND => self.binary(|a, b| Ok(Value::Bool(a.bool() && b.bool())))?,
                 OP_OR => self.binary(|a, b| Ok(Value::Bool(a.bool() || b.bool())))?,
                 OP_NEG => {
@@ -126,6 +139,11 @@ impl<'a> Vm<'a> {
                 OP_FALSE => self.push(Value::Bool(false)),
                 OP_POP => {
                     self.pop();
+                }
+                OP_END_CASE => {
+                    let top = self.pop();
+                    self.pop();
+                    self.push(top);
                 }
                 OP_JUMP => {
                     let dist = self.read_short() as usize;
@@ -144,24 +162,29 @@ impl<'a> Vm<'a> {
                 }
                 OP_DEFINE_GLOBAL => {
                     let value = self.pop();
-                    let name = self.pop().get_string(self.buf);
-                    self.globals.insert(name, value);
+                    let name = self.pop().get_string(buf);
+                    self.globals.insert(name.to_owned(), value);
                 }
                 OP_GET_GLOBAL => {
-                    let name = self.pop().get_string(self.buf);
+                    let name = self.pop().get_string(buf);
                     let global = self
                         .globals
                         .get(name)
                         .ok_or(RuntimeErr::new(format!("Undefined variable {}", name)))?;
                     self.push(*global);
                 }
+                OP_COPY => {
+                    let depth = self.read_byte() as usize;
+                    self.push(self.peek(depth));
+                }
+                OP_ERROR => return Err(RuntimeErr::new("No match".to_string())),
                 OP_RET => return Ok(()),
                 _ => unreachable!(),
             }
         }
     }
 
-    fn debug_instr(&self, instr: u8) {
+    fn debug_instr(&self, instr: u8, buf: &[u8]) {
         print!(
             "{} [ ",
             match instr {
@@ -190,6 +213,9 @@ impl<'a> Vm<'a> {
                 OP_DEFINE_GLOBAL => "DEFINE_GLOBAL",
                 OP_GET_GLOBAL => "GET_GLOBAL",
                 OP_NIL => "NIL",
+                OP_COPY => "COPY",
+                OP_ERROR => "ERROR",
+                OP_END_CASE => "END_CASE",
                 _ => todo!("{}", instr),
             }
         );
@@ -198,9 +224,7 @@ impl<'a> Vm<'a> {
                 "{} ",
                 match v {
                     Value::String { start, end } => {
-                        std::str::from_utf8(&self.buf[*start..*end])
-                            .unwrap()
-                            .to_string()
+                        std::str::from_utf8(&buf[*start..*end]).unwrap().to_string()
                     }
                     v => v.to_string(),
                 }
@@ -214,9 +238,7 @@ impl<'a> Vm<'a> {
                 *k,
                 match v {
                     Value::String { start, end } => {
-                        std::str::from_utf8(&self.buf[*start..*end])
-                            .unwrap()
-                            .to_string()
+                        std::str::from_utf8(&buf[*start..*end]).unwrap().to_string()
                     }
                     v => v.to_string(),
                 }

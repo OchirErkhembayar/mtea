@@ -1,4 +1,4 @@
-use compile::compile;
+use compile::{compile, Program};
 use lex::Lexer;
 use parse::Parser;
 use vm::Vm;
@@ -9,16 +9,28 @@ pub mod parse;
 pub mod value;
 pub mod vm;
 
-pub fn run_buf(buf: &[u8]) {
-    // {
-    //     use mtea::lex::TokenType;
-    //     let mut lexer = Lexer::new(buf);
-    //     let mut token = lexer.next_token().unwrap();
-    //     while token.token_type != TokenType::Eof {
-    //         println!("Token: {:?}", token);
-    //         token = lexer.next_token().unwrap();
-    //     }
-    // }
+const PRINT_TOKENS: bool = true;
+
+fn print_tokens(buf: &[u8]) {
+    use lex::TokenType;
+    let mut lexer = Lexer::new(buf);
+    let mut token = lexer.next_token().unwrap();
+    while token.token_type != TokenType::Eof {
+        println!(
+            " \"{}\", line: {}",
+            std::str::from_utf8(&buf[token.start..token.end]).unwrap(),
+            token.line
+        );
+        token = lexer.next_token().unwrap();
+    }
+    println!();
+}
+
+pub fn run_buf(vm: &mut Vm, buf: &'_ [u8]) {
+    if PRINT_TOKENS {
+        print_tokens(buf);
+    }
+
     let mut lexer = Lexer::new(buf);
     let current = match lexer.next_token() {
         Ok(token) => token,
@@ -37,8 +49,9 @@ pub fn run_buf(buf: &[u8]) {
     println!("Ast: {:?}", ast);
     let program = compile(ast);
     println!("Program: {:?}", program);
-    let mut vm = Vm::new(program, buf);
-    let _ = vm.run();
+    vm.update_program(program);
+    let _ = vm.run(buf);
+    vm.update_program(Program::default());
 }
 
 // TODO: Turn this into a decl macro

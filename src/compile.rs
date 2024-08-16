@@ -2,8 +2,8 @@ use crate::{
     parse::{Ast, Expr},
     value::Value,
     vm::{
-        OP_CONST, OP_DEFINE_GLOBAL, OP_FALSE, OP_GET_GLOBAL, OP_JUMP, OP_JUMP_IF_FALSE, OP_NIL,
-        OP_POP, OP_RET, OP_TRUE,
+        OP_CONST, OP_COPY, OP_DEFINE_GLOBAL, OP_END_CASE, OP_EQ, OP_ERROR, OP_FALSE, OP_GET_GLOBAL,
+        OP_JUMP, OP_JUMP_IF_FALSE, OP_NIL, OP_POP, OP_RET, OP_TRUE,
     },
 };
 
@@ -98,6 +98,25 @@ fn compile_expr(expr: Expr, program: &mut Program) {
             program.add_instr(OP_POP);
             compile_expr(*else_expr, program);
             patch_jump(else_jump, program);
+        }
+        Expr::Match { target, arms } => {
+            compile_expr(*target, program);
+            let mut done_jumps = vec![];
+            for arm in arms.into_iter() {
+                program.add_instr(OP_COPY);
+                program.add_instr(0);
+                compile_expr(arm.case, program);
+                program.add_instr(OP_EQ);
+                let next_case_jump = emit_jump(OP_JUMP_IF_FALSE, program);
+                program.add_instr(OP_POP);
+                compile_expr(arm.expr, program);
+                done_jumps.push(emit_jump(OP_JUMP, program));
+                patch_jump(next_case_jump, program);
+                program.add_instr(OP_POP);
+            }
+            program.add_instr(OP_ERROR);
+            done_jumps.into_iter().for_each(|j| patch_jump(j, program));
+            program.add_instr(OP_END_CASE);
         }
         Expr::Nil => program.add_instr(OP_NIL),
         Expr::Assign { start, end, value } => {

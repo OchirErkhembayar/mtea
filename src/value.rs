@@ -17,7 +17,7 @@ pub enum Value {
 impl Value {
     pub fn get_string<'a>(&self, buf: &'a [u8]) -> &'a str {
         let Value::String { start, end } = self else {
-            unreachable!()
+            unreachable!("{:?}", self);
         };
         unsafe { std::str::from_utf8_unchecked(&buf[*start..*end]) }
     }
