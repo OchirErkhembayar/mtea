@@ -28,7 +28,7 @@ impl Value {
             Value::Float(_) => "float",
             Value::Bool(_) => "boolean",
             Value::String { start: _, end: _ } => "string",
-            Value::Nil => "null",
+            Value::Nil => "nil",
         }
     }
 
@@ -100,7 +100,7 @@ impl Display for Value {
             Self::Float(float) => inner_write(float, f),
             Self::Bool(bool) => inner_write(bool, f),
             Self::String { start: _, end: _ } => inner_write("string", f),
-            Self::Nil => inner_write("null", f),
+            Self::Nil => inner_write("nil", f),
         }
     }
 }

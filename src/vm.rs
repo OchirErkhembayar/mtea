@@ -176,7 +176,10 @@ impl Vm {
                     self.push(self.peek_bottom(depth as usize));
                 }
                 OP_END_BLOCK => {
-                    let depth = self.read_byte();
+                    let mut depth = self.read_byte();
+                    if depth > 0 {
+                        depth -= 1;
+                    }
                     let result = self.pop();
                     self.sp -= depth as usize;
                     self.push(result);

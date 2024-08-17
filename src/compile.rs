@@ -105,6 +105,9 @@ impl<'a> Compiler<'a> {
     fn resolve_local(&self, start: usize, end: usize) -> Option<usize> {
         for i in (0..self.locals_count).rev() {
             let local = self.locals[i];
+            if local.depth < self.depth {
+                 bn
+            }
             if get_str(start, end, self.buf) == local.name {
                 return Some(i);
             }
@@ -158,6 +161,7 @@ impl<'a> Compiler<'a> {
                     self.patch_jump(next_case_jump, program);
                     program.add_instr(OP_POP);
                 }
+                program.add_const(Value::Nil); // How to handle errors?
                 program.add_instr(OP_ERROR);
                 done_jumps
                     .into_iter()
@@ -191,6 +195,7 @@ impl<'a> Compiler<'a> {
                     .into_iter()
                     .for_each(|expr| self.compile_expr(expr, program));
                 program.add_instr(OP_END_BLOCK);
+                println!("Locals: {:?}", &self.locals[0..self.locals_count]);
                 self.depth -= 1;
                 let mut depth = 0;
                 while self.locals_count > 0 && self.locals[self.locals_count - 1].depth > self.depth
@@ -200,6 +205,7 @@ impl<'a> Compiler<'a> {
                 }
                 program.add_instr(depth as u8);
             }
+            Expr::Error => program.add_instr(OP_ERROR),
         };
     }
 }

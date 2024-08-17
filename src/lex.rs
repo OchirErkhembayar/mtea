@@ -57,6 +57,7 @@ pub enum TokenType {
     Let,
     Nil,
     Eof,
+    Error,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -126,7 +127,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn ident(&mut self, first: u8) -> TokenType {
-        while !self.is_at_end() && self.peek(0).is_ascii_alphanumeric() {
+        while !self.is_at_end() && (self.peek(0).is_ascii_alphanumeric() || self.peek(0) == b'_') {
             self.advance();
         }
 
@@ -138,9 +139,10 @@ impl<'a> Lexer<'a> {
             b'i' => self.keyword("if", TokenType::If),
             b'd' => self.keyword("do", TokenType::Do),
             b'l' => self.keyword("let", TokenType::Let),
-            b'e' => match self.buf[self.start + 1] {
-                b'l' => self.keyword("else", TokenType::Else),
-                b'n' => self.keyword("end", TokenType::End),
+            b'e' => match self.buf.get(self.start + 1) {
+                Some(b'l') => self.keyword("else", TokenType::Else),
+                Some(b'e') => self.keyword("error", TokenType::Error),
+                Some(b'n') => self.keyword("end", TokenType::End),
                 _ => TokenType::Ident,
             },
             b'n' => self.keyword("nil", TokenType::Nil),
@@ -319,6 +321,7 @@ impl Display for TokenType {
             TokenType::Bang => inner_write("!", f),
             TokenType::Case => inner_write("case", f),
             TokenType::End => inner_write("end", f),
+            TokenType::Error => inner_write("error", f),
             TokenType::Eof => inner_write("EOF", f),
         }
     }

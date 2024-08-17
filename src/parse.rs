@@ -31,6 +31,7 @@ impl MatchArm {
 pub enum Expr {
     I32(i32),
     F32(f32),
+    Error,
     String {
         start: usize,
         end: usize,
@@ -393,6 +394,7 @@ impl<'a> Parser<'a> {
                 self.consume(TokenType::RParen)?;
                 expr
             }
+            TokenType::Error => Expr::Error,
             TokenType::Nil => Expr::Nil,
             _ => return Err(ParseErr::new(format!("Unexpected token: {:?}", token))),
         };
