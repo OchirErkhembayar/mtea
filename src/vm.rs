@@ -26,12 +26,13 @@ pub const OP_JUMP_IF_FALSE: u8 = 18;
 pub const OP_JUMP: u8 = 19;
 pub const OP_POP: u8 = 20;
 pub const OP_NOT: u8 = 21;
-pub const OP_DEFINE_GLOBAL: u8 = 22;
-pub const OP_GET_GLOBAL: u8 = 23;
-pub const OP_COPY: u8 = 24;
-pub const OP_END_CASE: u8 = 25;
-pub const OP_ERROR: u8 = 26;
-pub const OP_NIL: u8 = 27;
+pub const OP_COPY: u8 = 22; // Copy the top of the stack
+pub const OP_END_CASE: u8 = 23;
+pub const OP_ERROR: u8 = 24;
+pub const OP_END_BLOCK: u8 = 25;
+pub const OP_DEFINE_LOCAL: u8 = 26;
+pub const OP_GET_LOCAL: u8 = 27;
+pub const OP_NIL: u8 = 28;
 
 #[derive(Debug)]
 pub struct Vm {
@@ -39,6 +40,7 @@ pub struct Vm {
     consts: Vec<Value>,
     ip: usize,
     sp: usize,
+    bp: usize,
     stack: [Value; STACK_SIZE],
     globals: HashMap<String, Value>,
 }
@@ -61,6 +63,7 @@ impl Vm {
             globals: HashMap::new(),
             ip: 0,
             sp: 0,
+            bp: 0,
             stack: [Value::Nil; STACK_SIZE],
         }
     }
@@ -95,6 +98,10 @@ impl Vm {
 
     fn peek(&self, arg: usize) -> Value {
         self.stack[self.sp - 1 - arg]
+    }
+
+    fn peek_bottom(&self, depth: usize) -> Value {
+        self.stack[self.bp + depth]
     }
 
     fn binary<F>(&mut self, operation: F) -> Result<(), RuntimeErr>
@@ -160,18 +167,19 @@ impl Vm {
                     let value = self.pop();
                     self.push(Value::Bool(!value.bool()));
                 }
-                OP_DEFINE_GLOBAL => {
-                    let value = self.pop();
-                    let name = self.pop().get_string(buf);
-                    self.globals.insert(name.to_owned(), value);
+                OP_DEFINE_LOCAL => {
+                    let depth = self.read_byte();
+                    self.stack[self.bp + depth as usize] = self.peek(0);
                 }
-                OP_GET_GLOBAL => {
-                    let name = self.pop().get_string(buf);
-                    let global = self
-                        .globals
-                        .get(name)
-                        .ok_or(RuntimeErr::new(format!("Undefined variable {}", name)))?;
-                    self.push(*global);
+                OP_GET_LOCAL => {
+                    let depth = self.read_byte();
+                    self.push(self.peek_bottom(depth as usize));
+                }
+                OP_END_BLOCK => {
+                    let depth = self.read_byte();
+                    let result = self.pop();
+                    self.sp -= depth as usize;
+                    self.push(result);
                 }
                 OP_COPY => {
                     let depth = self.read_byte() as usize;
@@ -179,7 +187,7 @@ impl Vm {
                 }
                 OP_ERROR => return Err(RuntimeErr::new("No match".to_string())),
                 OP_RET => return Ok(()),
-                _ => unreachable!(),
+                _ => unreachable!("{}", instr),
             }
         }
     }
@@ -210,11 +218,12 @@ impl Vm {
                 OP_JUMP => "JUMP",
                 OP_POP => "POP",
                 OP_NOT => "NOT",
-                OP_DEFINE_GLOBAL => "DEFINE_GLOBAL",
-                OP_GET_GLOBAL => "GET_GLOBAL",
                 OP_NIL => "NIL",
                 OP_COPY => "COPY",
                 OP_ERROR => "ERROR",
+                OP_END_BLOCK => "END_BLOCK",
+                OP_GET_LOCAL => "GET_LOCAL",
+                OP_DEFINE_LOCAL => "DEFINE_LOCAL",
                 OP_END_CASE => "END_CASE",
                 _ => todo!("{}", instr),
             }

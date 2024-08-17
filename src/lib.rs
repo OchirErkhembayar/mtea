@@ -1,4 +1,4 @@
-use compile::{compile, Program};
+use compile::{Compiler, Program};
 use lex::Lexer;
 use parse::Parser;
 use vm::Vm;
@@ -9,7 +9,7 @@ pub mod parse;
 pub mod value;
 pub mod vm;
 
-const PRINT_TOKENS: bool = true;
+const PRINT_TOKENS: bool = false;
 
 fn print_tokens(buf: &[u8]) {
     use lex::TokenType;
@@ -42,16 +42,20 @@ pub fn run_buf(vm: &mut Vm, buf: &'_ [u8]) {
     let ast = match Parser::new(lexer, current).parse() {
         Ok(ast) => ast,
         Err(err) => {
-            eprintln!("ERROR: {}", err);
+            eprintln!("Parse error: {}", err);
             return;
         }
     };
     println!("Ast: {:?}", ast);
-    let program = compile(ast);
+    let program = Compiler::new(buf).compile(ast);
     println!("Program: {:?}", program);
     vm.update_program(program);
     let _ = vm.run(buf);
     vm.update_program(Program::default());
+}
+
+fn get_str(start: usize, end: usize, buf: &'_ [u8]) -> &str {
+    unsafe { std::str::from_utf8_unchecked(&buf[start..end]) }
 }
 
 // TODO: Turn this into a decl macro

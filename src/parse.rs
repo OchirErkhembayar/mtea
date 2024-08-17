@@ -64,6 +64,7 @@ pub enum Expr {
         end: usize,
         value: Box<Expr>,
     },
+    Block(Vec<Expr>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -194,34 +195,50 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> ParseRes<Expr> {
-        match self.peek().token_type {
-            TokenType::Ident => self.var_dec(),
-            _ => self.match_expr(),
-        }
+        self.var_dec()
     }
 
     fn var_dec(&mut self) -> ParseRes<Expr> {
-        let name = self.consume(TokenType::Ident)?;
-        self.consume(TokenType::Eq)?;
-        let value = self.match_expr()?;
-        let expr = Expr::Assign {
-            start: name.start,
-            end: name.end,
-            value: Box::new(value),
-        };
-        Ok(expr)
+        if self.peek().token_type == TokenType::Let {
+            self.next_token()?;
+            let name = self.consume(TokenType::Ident)?;
+            self.consume(TokenType::Eq)?;
+            let value = self.expression()?;
+            let expr = Expr::Assign {
+                start: name.start,
+                end: name.end,
+                value: Box::new(value),
+            };
+            Ok(expr)
+        } else {
+            self.block()
+        }
+    }
+
+    fn block(&mut self) -> ParseRes<Expr> {
+        if self.peek().token_type == TokenType::Do {
+            self.next_token()?;
+            let mut exprs = vec![];
+            while !self.is_at_end() && self.peek().token_type != TokenType::End {
+                exprs.push(self.expression()?);
+            }
+            self.consume(TokenType::End)?;
+            Ok(Expr::Block(exprs))
+        } else {
+            self.match_expr()
+        }
     }
 
     fn match_expr(&mut self) -> ParseRes<Expr> {
         if self.peek().token_type == TokenType::Case {
             self.next_token()?;
-            let target = self.match_expr()?;
+            let target = self.expression()?;
             self.consume(TokenType::Do)?;
             let mut arms = vec![];
             while self.peek().token_type != TokenType::End && !self.is_at_end() {
-                let case = self.match_expr()?;
+                let case = self.expression()?;
                 self.consume(TokenType::Arrow)?;
-                let expr = self.match_expr()?;
+                let expr = self.expression()?;
                 let arm = MatchArm::new(case, expr);
                 arms.push(arm);
             }
@@ -238,11 +255,11 @@ impl<'a> Parser<'a> {
     fn if_expr(&mut self) -> ParseRes<Expr> {
         if self.peek().token_type == TokenType::If {
             self.next_token()?;
-            let cond = self.or()?;
+            let cond = self.expression()?;
             self.consume(TokenType::Do)?;
-            let then_expr = self.or()?;
+            let then_expr = self.expression()?;
             self.consume(TokenType::Else)?;
-            let else_expr = self.or()?;
+            let else_expr = self.match_expr()?;
             Ok(Expr::If {
                 cond: Box::new(cond),
                 then_expr: Box::new(then_expr),

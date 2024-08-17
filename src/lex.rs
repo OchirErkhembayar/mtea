@@ -54,6 +54,7 @@ pub enum TokenType {
     Do,
     End,
     Else,
+    Let,
     Nil,
     Eof,
 }
@@ -103,7 +104,6 @@ impl<'a> Lexer<'a> {
         while self.peek(0).is_ascii_digit() {
             number *= 10;
             number += self.advance() as i32 - 48;
-            eprintln!("{number}");
         }
         let token_type = if self.peek(0) == b'.' {
             self.advance();
@@ -137,6 +137,7 @@ impl<'a> Lexer<'a> {
             b'o' => self.keyword("or", TokenType::Or),
             b'i' => self.keyword("if", TokenType::If),
             b'd' => self.keyword("do", TokenType::Do),
+            b'l' => self.keyword("let", TokenType::Let),
             b'e' => match self.buf[self.start + 1] {
                 b'l' => self.keyword("else", TokenType::Else),
                 b'n' => self.keyword("end", TokenType::End),
@@ -289,6 +290,7 @@ impl Display for TokenType {
         match self {
             TokenType::I32(int) => inner_write(int, f),
             TokenType::F32(float) => inner_write(float, f),
+            TokenType::Let => inner_write("let", f),
             TokenType::Arrow => inner_write("->", f),
             TokenType::Plus => inner_write("+", f),
             TokenType::Minus => inner_write("-", f),
